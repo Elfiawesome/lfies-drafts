@@ -1,0 +1,20 @@
+{
+  "name": "lfies-drafts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A handmade archive of human-made drafts.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
+    "preview": "node scripts/serve.mjs",
+    "test:midi": "node scripts/test-midi.mjs",
+    "check": "node scripts/test-midi.mjs"
+  },
+  "dependencies": {
+    "marked": "^15.0.12"
+  }
+}

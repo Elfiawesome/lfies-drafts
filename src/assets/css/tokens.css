@@ -1,0 +1,36 @@
+:root {
+  --paper: #f4ead6;
+  --paper-light: #fbf4e4;
+  --paper-deep: #e9d9ba;
+  --paper-shadow: #d8c39d;
+  --ink: #241f18;
+  --ink-soft: #5f5343;
+  --ink-faint: #8b7a62;
+  --line: #2a241c;
+  --red: #c64b37;
+  --red-deep: #8f2e21;
+  --blue: #315f7c;
+  --blue-deep: #234459;
+  --teal: #3c756a;
+  --gold: #d8a13a;
+  --gold-deep: #a9751c;
+  --pink: #e3a69d;
+  --green: #5d7b46;
+  --lavender: #75678e;
+  --orange: #d37934;
+  --player-bg: #211c16;
+  --player-panel: #2c261e;
+  --player-line: #4a4033;
+  --player-ink: #f3e8d1;
+  --player-muted: #a8987b;
+  --shadow: 6px 6px 0 var(--ink);
+  --shadow-small: 3px 3px 0 var(--ink);
+  --shadow-color: rgba(36, 31, 24, 0.18);
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-body: "Lora", Georgia, "Times New Roman", serif;
+  --font-mono: "Courier Prime", "Courier New", monospace;
+  --shell: 1180px;
+  --gutter: clamp(1rem, 3.4vw, 2.75rem);
+  --radius: 3px;
+  --header-height: 7.5rem;
+}
