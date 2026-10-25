@@ -7,6 +7,11 @@ import {
   walkFiles,
 } from "./files.mjs";
 import {
+  applyMetadata,
+  recordFromFile,
+  recordFromStats,
+} from "./metadata.mjs";
+import {
   compareTitles,
   earliestTimestamp,
   safeIsoDate,
@@ -41,10 +46,17 @@ function titleFromSlug(slug) {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-export async function loadContent({ contentDirectory, types, warn = () => {} }) {
+export async function loadContent({
+  contentDirectory,
+  types,
+  metadata,
+  warn = () => {},
+}) {
   const typeMap = new Map(types.map((type) => [type.id, type]));
   const entries = [];
   const collections = [];
+  const fileMetadata = metadata?.files || {};
+  let metadataChanged = false;
   const rootEntries = await readdir(contentDirectory, { withFileTypes: true });
 
   for (const typeDirectory of rootEntries) {
@@ -85,10 +97,38 @@ export async function loadContent({ contentDirectory, types, warn = () => {} }) 
 
       const relativeFiles = await walkFiles(entryPath);
       const files = await describeFiles(entryPath, relativeFiles);
+      for (const file of files) {
+        const key = `${type.id}/${slug}/${file.path}`;
+        const saved = fileMetadata[key];
+        if (saved) {
+          applyMetadata(file, saved);
+        } else {
+          fileMetadata[key] = recordFromFile(file);
+          metadataChanged = true;
+        }
+      }
+
       const entryStats = await stat(entryJsonPath).catch(() => null);
-      const metadataTimestamp = entryStats
-        ? earliestTimestamp(entryStats.birthtimeMs, entryStats.mtimeMs, entryStats.atimeMs)
-        : 0;
+      const entryKey = `${type.id}/${slug}/entry.json`;
+      let entryRecord = fileMetadata[entryKey];
+      if (entryStats && !entryRecord) {
+        entryRecord = recordFromStats(entryStats);
+        fileMetadata[entryKey] = entryRecord;
+        metadataChanged = true;
+      }
+      const metadataTimestamp = entryRecord
+        ? earliestTimestamp(
+            entryRecord.birthtimeMs ?? 0,
+            entryRecord.mtimeMs ?? 0,
+            entryRecord.atimeMs ?? 0,
+          )
+        : entryStats
+          ? earliestTimestamp(
+              entryStats.birthtimeMs,
+              entryStats.mtimeMs,
+              entryStats.atimeMs,
+            )
+          : 0;
 
       const normalized = type.normalize(raw, {
         slug,
@@ -138,6 +178,7 @@ export async function loadContent({ contentDirectory, types, warn = () => {} }) 
     entries,
     collections,
     lookup: createLookup(entries),
+    metadataChanged,
   };
 }
 

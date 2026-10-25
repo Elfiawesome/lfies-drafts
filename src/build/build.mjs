@@ -5,6 +5,11 @@ import { loadContent } from "./content.mjs";
 import { loadContentTypes } from "./registry.mjs";
 import { createMarkdownContext } from "./markdown.mjs";
 import {
+  metadataPath,
+  loadMetadata,
+  saveMetadata,
+} from "./metadata.mjs";
+import {
   ensureDirectory,
   mirrorTree,
   resetDirectory,
@@ -125,11 +130,24 @@ export async function buildSite({ root, site, onLog = () => {} }) {
   await mirrorTree(sourceAssets, path.join(distDirectory, "assets"), { mode: "copy" });
   await copyVendorAssets(distDirectory);
 
-  const { entries, collections, lookup } = await loadContent({
+  const savedMetadataPath = metadataPath(contentDirectory);
+  const savedMetadata = await loadMetadata(savedMetadataPath);
+  const { entries, collections, lookup, metadataChanged } = await loadContent({
     contentDirectory,
     types,
+    metadata: savedMetadata,
     warn: (message) => warnings.push(message),
   });
+  if (metadataChanged) {
+    await saveMetadata(savedMetadataPath, savedMetadata);
+    warnings.push(
+      `${savedMetadata.exists ? "Updated" : "Created"} content/.metadata.json with file timestamps. Commit it so remote builds keep the same dates.`,
+    );
+  } else if (!savedMetadata.exists) {
+    warnings.push(
+      "content/.metadata.json is missing. Dates will come from the filesystem; run npm run metadata:save and commit the file.",
+    );
+  }
 
   const allMediaFiles = entries.flatMap((entry) => entry.files);
   const mediaBytes = allMediaFiles.reduce((total, file) => total + file.bytes, 0);

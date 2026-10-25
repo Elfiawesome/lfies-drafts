@@ -11,6 +11,8 @@
     "build": "node scripts/build.mjs",
     "dev": "node scripts/dev.mjs",
     "preview": "node scripts/serve.mjs",
+    "metadata:save": "node scripts/metadata.mjs save",
+    "metadata:restore": "node scripts/metadata.mjs restore",
     "test:midi": "node scripts/test-midi.mjs",
     "check": "node scripts/test-midi.mjs"
   },
