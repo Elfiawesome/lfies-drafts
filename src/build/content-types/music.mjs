@@ -40,9 +40,7 @@ function transport() {
     <button class="transport__skip" type="button" data-action="restart" aria-label="Back to the start">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h2v16H6V4Zm11.5 0-8 8 8 8V4Z"/></svg>
     </button>
-    <div class="seek" data-seek role="slider" tabindex="0" aria-label="Seek through the draft" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-      <span class="seek__rail"><span class="seek__fill" data-seek-fill></span><span class="seek__thumb" data-seek-thumb></span></span>
-    </div>
+    <input class="seek" data-seek type="range" min="0" max="1000" step="1" value="0" aria-label="Seek through the draft">
     <span class="transport__time"><span data-current>0:00</span> / <span data-duration>--:--</span></span>
   </div>`;
 }
@@ -54,7 +52,7 @@ function sourceSwitch(kind, checked) {
     <span class="switch__box" aria-hidden="true"></span>
     <span>${label}</span>
   </label>
-  <input class="mix-slider" type="range" min="0" max="1" step="0.01" value="${kind === "audio" ? "0.85" : "0.7"}" data-${kind}-volume aria-label="${label} volume">`;
+  <input class="mix-slider" type="range" min="0" max="1" step="0.01" value="${kind === "audio" ? "0.85" : "0.9"}" data-${kind}-volume aria-label="${label} volume">`;
 }
 
 function mixer(entry) {
@@ -110,7 +108,7 @@ function cassette(entry) {
         <span class="cassette__reel"></span>
       </div>
     </div>
-    <p class="cassette-stage__hint" data-play-hint>Press play to run the tape</p>
+    <p class="cassette-stage__hint" data-play-hint>Ready</p>
   </div>`;
 }
 
@@ -125,7 +123,6 @@ function midiPlayer(entry) {
     <div class="player__strip">
       <div class="player__meta">
         <span data-midi-meta>Reading MIDI...</span>
-        <span>${hasAudio ? "Audio drives the roll" : "Live MIDI preview"}</span>
       </div>
       ${transport()}
     </div>
@@ -134,8 +131,8 @@ function midiPlayer(entry) {
       ${trackPanel()}
     </div>
     <div class="player__status">
-      <span>MIDI is synthesized in your browser</span>
-      <span>${hasAudio ? "Audio plays by default; flip MIDI on to hear the synth" : "Click the roll or scrub to move around"}</span>
+      <span data-sound-status>${hasAudio ? "MIDI sound off" : "Loading SoundFont..."}</span>
+      <span data-audio-status hidden></span>
     </div>
   </div>`;
 }
@@ -143,7 +140,7 @@ function midiPlayer(entry) {
 function audioPlayer(entry) {
   return `<div class="player player--audio" data-player-mode="audio">
     <div class="audio-only-meta">
-      <span>Cassette deck / <strong data-audio-meta>${escapeHtml(audioName(entry))}</strong></span>
+      <span><strong data-audio-meta>${escapeHtml(audioName(entry))}</strong></span>
       <span>${formatBytes(entry.media.audio.bytes)}</span>
     </div>
     ${cassette(entry)}
@@ -154,8 +151,8 @@ function audioPlayer(entry) {
       ${mixer(entry)}
     </div>
     <div class="player__status">
-      <span data-play-status>Ready to play</span>
-      <span>No MIDI file filed with this one</span>
+      <span data-play-status>Ready</span>
+      <span data-audio-status hidden></span>
     </div>
   </div>`;
 }
@@ -163,7 +160,7 @@ function audioPlayer(entry) {
 function bar(entry) {
   return `<div class="window__bar window__bar--ink">
     <span class="window__dots" aria-hidden="true"><span class="window__dot"></span><span class="window__dot"></span><span class="window__dot"></span></span>
-    <span class="window__title">Draft player / ${escapeHtml(entry.title)}</span>
+    <span class="window__title">Player</span>
     <span class="window__meta">${escapeHtml(sourceLabel(entry) || "EMPTY")}</span>
   </div>`;
 }
@@ -173,10 +170,9 @@ export default {
   order: 10,
   label: "Music",
   pluralLabel: "Music",
-  drawerTitle: "The music drawer",
-  drawerDescription:
-    "Songs, sketches, transcriptions, and soundtrack experiments. Some are finished. Most are not. All of them were made by a person.",
-  descriptionFallback: "No notes were filed with this one. The file speaks for itself.",
+  drawerTitle: "Music",
+  drawerDescription: "Songs, sketches, transcriptions, and soundtrack experiments.",
+
   styles: ["css/music-player.css"],
   filters: [
     { value: "midi", label: "Has MIDI" },
@@ -259,8 +255,7 @@ export default {
         <div class="window__body">
           <div class="no-player">
             <div>
-              <strong>Nothing to play.</strong>
-              <p>The file survived, but there is no MIDI or audio recording attached to this draft.</p>
+              <strong>No audio or MIDI file.</strong>
             </div>
           </div>
         </div>
@@ -273,4 +268,5 @@ export default {
     </section>`;
   },
 };
+
 

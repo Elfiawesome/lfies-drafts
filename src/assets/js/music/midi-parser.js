@@ -389,6 +389,7 @@ function parseTrack(view, start, end, trackIndex, trackNames) {
     name: trackName,
     instrumentLabel,
     primaryProgram,
+    hasProgramChanges: programCounts.size > 0,
     channels: [...channels].sort((a, b) => a - b),
     notes,
   });
@@ -494,6 +495,31 @@ export function parseMidi(arrayBuffer) {
     );
   };
 
+  const timeToTick = (time) => {
+    if (smpte) {
+      return Math.max(0, time) * ticksPerSecond;
+    }
+    if (segments.length === 1) {
+      return (Math.max(0, time) * ticksPerQuarter * 1_000_000) / segments[0].usPerQuarter;
+    }
+    let low = 0;
+    let high = segments.length - 1;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (segments[middle].time <= time) {
+        low = middle;
+      } else {
+        high = middle - 1;
+      }
+    }
+    const segment = segments[low];
+    return (
+      segment.tick +
+      ((time - segment.time) * ticksPerQuarter * 1_000_000) /
+        segment.usPerQuarter
+    );
+  };
+
   const tracks = aggregate.tracks
     .filter((track) => track.notes.length)
     .map((track) => {
@@ -501,6 +527,10 @@ export function parseMidi(arrayBuffer) {
         note: note.note,
         velocity: note.velocity,
         channel: note.channel,
+        program: note.program,
+        startTick: note.startTick,
+        endTick: note.endTick,
+        durationTicks: note.endTick - note.startTick,
         start: tickToTime(note.startTick),
         duration: Math.max(0.015, tickToTime(note.endTick) - tickToTime(note.startTick)),
       }));
@@ -516,6 +546,7 @@ export function parseMidi(arrayBuffer) {
         name,
         channel,
         program,
+        hasProgramChanges: track.hasProgramChanges,
         notes,
       };
     });
@@ -528,19 +559,40 @@ export function parseMidi(arrayBuffer) {
   let minNote = 127;
   let maxNote = 0;
   let endTime = 0;
+  let endTick = 0;
   for (const note of notes) {
     minNote = Math.min(minNote, note.note);
     maxNote = Math.max(maxNote, note.note);
     endTime = Math.max(endTime, note.start + note.duration);
+    endTick = Math.max(endTick, note.startTick + note.durationTicks);
   }
 
   const duration = endTime + 0.35;
   const initialTempo = tempoEvents.length
-    ? tempoEvents.find((event) => event.tick === 0)?.usPerQuarter ??
+    ? tempoEvents.filter((event) => event.tick === 0).at(-1)?.usPerQuarter ??
       tempoEvents[0].usPerQuarter
     : DEFAULT_TEMPO;
-  const initialTimeSignature = aggregate.timeSignatures
-    .sort((a, b) => a.tick - b.tick)[0] ?? { numerator: 4, denominator: 4 };
+
+  const timeSignatures = aggregate.timeSignatures
+    .filter(
+      (event) =>
+        Number.isFinite(event.tick) &&
+        event.numerator > 0 &&
+        event.denominator > 0,
+    )
+    .sort((a, b) => a.tick - b.tick)
+    .filter((event, index, all) => index === 0 || event.tick !== all[index - 1].tick);
+  if (!timeSignatures.length || timeSignatures[0].tick > 0) {
+    timeSignatures.unshift({ tick: 0, numerator: 4, denominator: 4 });
+  }
+  const initialTimeSignature = timeSignatures[0];
+
+  const tempoMap = segments.map((segment) => ({
+    tick: segment.tick,
+    time: segment.time,
+    usPerQuarter: segment.usPerQuarter,
+    bpm: Math.round(60_000_000 / segment.usPerQuarter),
+  }));
 
   return {
     format,
@@ -548,11 +600,16 @@ export function parseMidi(arrayBuffer) {
     ppq: ticksPerQuarter,
     smpte,
     duration,
+    endTick,
     bpm: Math.round(60_000_000 / initialTempo),
     timeSignature: {
       numerator: initialTimeSignature.numerator,
       denominator: initialTimeSignature.denominator,
     },
+    timeSignatures,
+    tempoMap,
+    tickToTime,
+    timeToTick,
     tracks,
     notes,
     noteCount: notes.length,

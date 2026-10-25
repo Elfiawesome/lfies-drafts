@@ -15,6 +15,9 @@
     "check": "node scripts/test-midi.mjs"
   },
   "dependencies": {
-    "marked": "^15.0.12"
+    "marked": "^15.0.12",
+    "spessasynth_core": "^4.3.22",
+    "spessasynth_lib": "^4.3.14",
+    "stb-vorbis": "^0.0.6"
   }
 }

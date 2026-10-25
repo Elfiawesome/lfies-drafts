@@ -126,56 +126,6 @@
   text-transform: uppercase;
 }
 
-.marquee {
-  overflow: hidden;
-  padding: 0.48rem 0;
-  border-block: 2px solid var(--line);
-  background: var(--ink);
-  color: var(--paper);
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  user-select: none;
-}
-
-.marquee__track {
-  display: flex;
-  width: max-content;
-  animation: marquee-scroll 45s linear infinite;
-}
-
-.marquee:hover .marquee__track {
-  animation-play-state: paused;
-}
-
-.marquee__group {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-}
-
-.marquee__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 1.6rem;
-  padding-right: 1.6rem;
-  white-space: nowrap;
-}
-
-.marquee__item svg {
-  width: 0.68rem;
-  height: 0.68rem;
-  color: var(--gold);
-}
-
-@keyframes marquee-scroll {
-  to {
-    transform: translateX(-50%);
-  }
-}
-
 .site-main {
   padding-top: clamp(2.6rem, 6vw, 5rem);
   padding-bottom: clamp(2.5rem, 5vw, 4rem);
@@ -193,7 +143,7 @@
 
 .footer-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 0.85fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
   gap: 2rem;
   align-items: start;
 }
@@ -227,44 +177,6 @@
   letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--ink-soft);
-}
-
-.badge-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.badge-88x31 {
-  display: grid;
-  place-items: center;
-  width: 88px;
-  height: 31px;
-  padding: 2px 4px;
-  border: 1px solid var(--ink);
-  background: var(--paper-light);
-  box-shadow: 2px 2px 0 var(--ink);
-  font-family: var(--font-mono);
-  font-size: 7.5px;
-  font-weight: 700;
-  line-height: 1.05;
-  letter-spacing: 0.04em;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.badge-88x31--red {
-  color: var(--paper-light);
-  background: var(--red);
-}
-
-.badge-88x31--ink {
-  color: var(--paper-light);
-  background: var(--ink);
-}
-
-.badge-88x31--gold {
-  background: var(--gold);
 }
 
 .footer-links {
@@ -620,7 +532,7 @@ button.tag.is-active {
 }
 
 .section {
-  margin-top: clamp(3.4rem, 8vw, 6.5rem);
+  margin-top: clamp(2.5rem, 5vw, 4rem);
 }
 
 .section-head {
@@ -746,7 +658,7 @@ button.tag.is-active {
 }
 
 .prose ul > li::before {
-  content: "→";
+  content: "\2192";
   display: inline-block;
   width: 1.25em;
   margin-left: -1.25em;
@@ -861,3 +773,4 @@ button.tag.is-active {
     align-items: flex-start;
   }
 }
+

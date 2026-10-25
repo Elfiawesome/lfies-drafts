@@ -1,5 +1,7 @@
 import { parseMidi } from "./midi-parser.js";
+import { inferProgram } from "./instruments.js";
 import { PianoRoll, trackColor } from "./piano-roll.js";
+import { SoundfontSynth } from "./soundfont-synth.js";
 import { MidiSynth } from "./synth.js";
 
 function clamp(value, low, high) {
@@ -70,6 +72,8 @@ class MusicPlayer {
     this.audioReady = false;
     this.context = null;
     this.synth = null;
+    this.synthPromise = null;
+    this.synthKind = null;
     this.duration = 0;
     this.position = 0;
     this.startContextTime = 0;
@@ -78,18 +82,22 @@ class MusicPlayer {
     this.scheduler = null;
     this.frame = null;
     this.pendingSeek = null;
-    this.lastSeekAt = 0;
+    this.seekTarget = null;
+    this.seekTargetAt = 0;
+    this.seekVerifyTimer = null;
+    this.seekVerifyStarted = 0;
+    this.audioLoading = false;
+    this.audioBlobUrl = null;
+    this.resumeAfterSeek = false;
     this.mutedTracks = new Set();
     this.notes = [];
     this.playing = false;
     this.midiEnabled = false;
-    this.scrubbing = false;
+    this.seeking = false;
 
     this.playButton = root.querySelector('[data-action="toggle"]');
     this.restartButton = root.querySelector('[data-action="restart"]');
     this.seek = root.querySelector("[data-seek]");
-    this.seekFill = root.querySelector("[data-seek-fill]");
-    this.seekThumb = root.querySelector("[data-seek-thumb]");
     this.currentLabels = [...root.querySelectorAll("[data-current]")];
     this.durationLabels = [...root.querySelectorAll("[data-duration]")];
     this.midiMeta = root.querySelector("[data-midi-meta]");
@@ -103,6 +111,8 @@ class MusicPlayer {
     this.midiVolume = root.querySelector("[data-midi-volume]");
     this.playHint = root.querySelector("[data-play-hint]");
     this.playStatus = root.querySelector("[data-play-status]");
+    this.soundStatus = root.querySelector("[data-sound-status]");
+    this.audioStatus = root.querySelector("[data-audio-status]");
     this.audioMeta = root.querySelector("[data-audio-meta]");
     this.canvas = root.querySelector("[data-pianoroll-canvas]");
 
@@ -143,10 +153,25 @@ class MusicPlayer {
       this.updateDuration();
       this.updateUI(this.getPosition());
     });
+    audio.addEventListener("seeked", () => {
+      if (
+        this.seekTarget !== null &&
+        Math.abs(audio.currentTime - this.seekTarget) < 0.5
+      ) {
+        this.seekTarget = null;
+        clearTimeout(this.seekVerifyTimer);
+      }
+      this.updateUI(this.getPosition());
+      this.resumeAudioAfterSeek();
+    });
     audio.addEventListener("ended", () => this.finish());
     audio.addEventListener("error", () => {
       if (!this.audioFailed) {
         this.audioFailed = true;
+        this.seekTarget = null;
+        this.audioLoading = false;
+        clearTimeout(this.seekVerifyTimer);
+        this.setAudioStatus("");
         this.showAudioError("The recording could not be loaded.");
         this.updateDuration();
       }
@@ -169,8 +194,12 @@ class MusicPlayer {
             parsed.tracks.length > 1
               ? (trackIndex / (parsed.tracks.length - 1) - 0.5) * 0.55
               : 0;
+          const inferredProgram = track.hasProgramChanges
+            ? null
+            : inferProgram(track.name, null);
           return track.notes.map((note) => ({
             ...note,
+            program: inferredProgram ?? note.program ?? 0,
             trackIndex,
             pan,
           }));
@@ -180,9 +209,6 @@ class MusicPlayer {
       this.roll = new PianoRoll(this.canvas, parsed, {
         onSeek: (time) => this.seekTo(time),
       });
-      if (this.context) {
-        this.ensureSynth();
-      }
       this.renderTracks();
       this.loading.hidden = true;
       this.error.hidden = true;
@@ -192,6 +218,14 @@ class MusicPlayer {
       }
       this.updateDuration();
       this.roll.setTime(this.getPosition());
+      if (this.midiEnabled) {
+        this.setSoundStatus("Loading SoundFont...");
+        window.setTimeout(() => {
+          if (this.midiEnabled && !this.synth) {
+            void this.ensureSynth();
+          }
+        }, 600);
+      }
     } catch (error) {
       console.warn("MIDI player error:", error);
       if (this.loading) {
@@ -240,27 +274,27 @@ class MusicPlayer {
     });
 
     if (this.seek) {
-      this.seek.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        this.scrubbing = true;
-        this.seek.setPointerCapture(event.pointerId);
-        this.seekFromPointer(event);
+      this.seek.addEventListener("pointerdown", () => {
+        this.seeking = true;
       });
-      this.seek.addEventListener("pointermove", (event) => {
-        if (this.scrubbing) {
-          this.seekFromPointer(event);
-        }
-      });
-      const stopScrubbing = (event) => {
-        this.scrubbing = false;
-        try {
-          this.seek.releasePointerCapture(event.pointerId);
-        } catch {
+      const finishSeeking = () => {
+        if (!this.seeking) {
           return;
         }
+        this.seeking = false;
+        this.updateUI(this.getPosition());
+        this.resumeAudioAfterSeek();
       };
-      this.seek.addEventListener("pointerup", stopScrubbing);
-      this.seek.addEventListener("pointercancel", stopScrubbing);
+      window.addEventListener("pointerup", finishSeeking);
+      window.addEventListener("pointercancel", finishSeeking);
+      const applySeekValue = () => {
+        if (!this.duration) {
+          return;
+        }
+        this.seekTo((Number(this.seek.value) / 1000) * this.duration);
+      };
+      this.seek.addEventListener("input", applySeekValue);
+      this.seek.addEventListener("change", applySeekValue);
       this.seek.addEventListener("keydown", (event) => {
         const current = this.getPosition();
         let target = null;
@@ -289,11 +323,30 @@ class MusicPlayer {
     this.midiToggle?.addEventListener("change", () => {
       this.midiEnabled = this.midiToggle.checked;
       this.stopScheduledNotes();
-      if (this.midiEnabled) {
-        this.ensureSynth();
-        void this.context?.resume();
-        this.lastScheduled = Math.max(0, this.getPosition() - 0.05);
+      if (!this.midiEnabled) {
+        this.setSoundStatus("MIDI sound off");
+        return;
       }
+      this.ensureContext();
+      void this.context?.resume();
+      const wasPlaying = this.playing;
+      this.setSoundStatus("Loading SoundFont...");
+      void this.ensureSynth().then((ready) => {
+        if (!ready) {
+          this.setSoundStatus("Sound unavailable");
+          return;
+        }
+        if (wasPlaying) {
+          this.lastScheduled = Math.max(0, this.getPosition() - 0.05);
+        }
+        this.setSoundStatus(
+          !this.midiEnabled
+            ? "MIDI sound off"
+            : this.synthKind === "soundfont"
+              ? "GeneralUser GS"
+              : "Fallback synth",
+        );
+      });
     });
 
     this.audioVolume?.addEventListener("input", () => {
@@ -332,20 +385,6 @@ class MusicPlayer {
     });
   }
 
-  seekFromPointer(event) {
-    if (!this.duration) {
-      return;
-    }
-    const now = performance.now();
-    if (now - this.lastSeekAt < 12) {
-      return;
-    }
-    this.lastSeekAt = now;
-    const rect = this.seek.getBoundingClientRect();
-    const ratio = clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
-    this.seekTo(ratio * this.duration);
-  }
-
   ensureContext() {
     if (this.context) {
       return true;
@@ -358,15 +397,36 @@ class MusicPlayer {
     return true;
   }
 
-  ensureSynth() {
+  async ensureSynth() {
+    if (this.synth) {
+      return true;
+    }
     if (!this.midi || !this.ensureContext()) {
       return false;
     }
-    if (!this.synth) {
-      this.synth = new MidiSynth(this.context);
-      this.synth.setVolume(this.midiVolume ? Number(this.midiVolume.value) : 0.7);
+    if (!this.synthPromise) {
+      this.synthPromise = SoundfontSynth.create(this.context)
+        .then((synth) => {
+          this.synth = synth;
+          this.synthKind = "soundfont";
+          this.synth.setVolume(
+            this.midiVolume ? Number(this.midiVolume.value) : 0.9,
+          );
+          this.setSoundStatus("GeneralUser GS");
+          return true;
+        })
+        .catch((error) => {
+          console.warn("SoundFont failed to load, using fallback synth:", error);
+          this.synth = new MidiSynth(this.context);
+          this.synthKind = "fallback";
+          this.synth.setVolume(
+            this.midiVolume ? Number(this.midiVolume.value) : 0.9,
+          );
+          this.setSoundStatus("Fallback synth");
+          return true;
+        });
     }
-    return true;
+    return this.synthPromise;
   }
 
   clockMode() {
@@ -381,6 +441,19 @@ class MusicPlayer {
 
   getPosition() {
     if (this.clockMode() === "audio") {
+      if (this.seekTarget !== null) {
+        const elapsed = performance.now() - this.seekTargetAt;
+        if (
+          !this.audio.seeking &&
+          Math.abs(this.audio.currentTime - this.seekTarget) < 0.25
+        ) {
+          this.seekTarget = null;
+        } else if (this.audioLoading || this.audio.seeking || elapsed < 1500) {
+          return clamp(this.seekTarget, 0, this.duration || 0);
+        } else {
+          this.seekTarget = null;
+        }
+      }
       return clamp(this.audio.currentTime || 0, 0, this.duration || 0);
     }
     if (this.playing && this.context) {
@@ -415,13 +488,13 @@ class MusicPlayer {
     const progress = this.duration ? (position / this.duration) * 100 : 0;
     if (this.seek) {
       this.seek.style.setProperty("--progress", `${progress}%`);
-      this.seek.setAttribute("aria-valuenow", String(Math.round(progress)));
-    }
-    if (this.seekFill) {
-      this.seekFill.style.width = `${progress}%`;
-    }
-    if (this.seekThumb) {
-      this.seekThumb.style.left = `${progress}%`;
+      if (!this.seeking) {
+        this.seek.value = String(Math.round(progress * 10));
+      }
+      this.seek.setAttribute(
+        "aria-valuetext",
+        `${formatClock(position)} of ${formatClock(this.duration)}`,
+      );
     }
     for (const label of this.currentLabels) {
       label.textContent = formatClock(position);
@@ -432,20 +505,33 @@ class MusicPlayer {
   }
 
   async play() {
-    if (this.playing || !this.duration) {
+    if (this.playing || !this.duration || this.audioLoading) {
       return;
     }
     if (this.getPosition() >= this.duration - 0.08) {
       this.seekTo(0);
     }
+    this.resumeAfterSeek = false;
     const mode = this.clockMode();
     if (!mode) {
       return;
     }
 
-    if (this.midi && !this.ensureSynth()) {
-      this.showAudioError("Web Audio is not available in this browser.");
-      return;
+    if (this.midi && this.midiEnabled) {
+      if (!this.synth) {
+        this.setLoading("Loading instruments...");
+      }
+      const ready = await this.ensureSynth();
+      if (!ready) {
+        if (!this.hasAudio) {
+          this.showAudioError("Web Audio is not available in this browser.");
+          return;
+        }
+        this.setSoundStatus("MIDI sound unavailable");
+      }
+      if (this.loading) {
+        this.loading.hidden = true;
+      }
     }
 
     if (this.context) {
@@ -490,6 +576,7 @@ class MusicPlayer {
     }
     const position = this.getPosition();
     this.playing = false;
+    this.resumeAfterSeek = false;
     if (this.audio && !this.audio.paused) {
       this.audio.pause();
     }
@@ -516,6 +603,8 @@ class MusicPlayer {
       return;
     }
     const position = this.duration;
+    this.seekTarget = null;
+    this.resumeAfterSeek = false;
     this.playing = false;
     if (this.audio && !this.audio.paused) {
       this.audio.pause();
@@ -544,15 +633,14 @@ class MusicPlayer {
     }
     const target = clamp(value, 0, this.duration);
     if (this.audio && !this.audioFailed) {
-      if (this.audio.readyState >= 1) {
-        try {
-          this.audio.currentTime = target;
-        } catch {
-          this.pendingSeek = target;
-        }
-      } else {
-        this.pendingSeek = target;
+      if (this.playing && !this.audio.paused) {
+        this.resumeAfterSeek = true;
+        this.audio.pause();
       }
+      this.seekTarget = target;
+      this.seekTargetAt = performance.now();
+      this.pendingSeek = target;
+      this.applyAudioSeek(target);
     }
     if (this.clockMode() === "midi") {
       this.position = target;
@@ -567,6 +655,140 @@ class MusicPlayer {
     if (!this.playing && this.playHint) {
       this.playHint.textContent = "Ready to play";
     }
+  }
+
+  applyAudioSeek(target) {
+    if (!this.audio || this.audioFailed || this.audioLoading) {
+      return;
+    }
+    clearTimeout(this.seekVerifyTimer);
+    this.seekVerifyStarted = performance.now();
+    if (this.audio.readyState >= 1) {
+      try {
+        this.audio.currentTime = target;
+      } catch {
+        void this.startAudioFallback(target);
+        return;
+      }
+    }
+    this.seekVerifyTimer = window.setTimeout(
+      () => this.verifyAudioSeek(target),
+      700,
+    );
+  }
+
+  verifyAudioSeek(target) {
+    if (!this.audio || this.audioFailed || this.audioLoading) {
+      return;
+    }
+    if (
+      this.seekTarget === null ||
+      Math.abs(this.seekTarget - target) > 0.15
+    ) {
+      return;
+    }
+    const applied =
+      !this.audio.seeking &&
+      Math.abs(this.audio.currentTime - target) < 0.5;
+    if (applied) {
+      this.seekTarget = null;
+      this.updateUI(this.getPosition());
+      this.resumeAudioAfterSeek();
+      return;
+    }
+    if (
+      this.audio.seeking &&
+      performance.now() - this.seekVerifyStarted < 3000
+    ) {
+      this.seekVerifyTimer = window.setTimeout(
+        () => this.verifyAudioSeek(target),
+        600,
+      );
+      return;
+    }
+    void this.startAudioFallback(target);
+  }
+
+  async startAudioFallback(target) {
+    if (this.audioLoading || !this.audio || this.audioFailed) {
+      return;
+    }
+    this.audioLoading = true;
+    clearTimeout(this.seekVerifyTimer);
+    this.setPlayStatus("");
+    this.setAudioStatus("Loading audio...");
+    this.pendingSeek = this.seekTarget ?? target;
+    try {
+      const response = await fetch(this.audioUrl);
+      if (!response.ok) {
+        throw new Error(`Audio request failed with status ${response.status}.`);
+      }
+      const blob = await response.blob();
+      if (this.audioBlobUrl) {
+        URL.revokeObjectURL(this.audioBlobUrl);
+      }
+      this.audioBlobUrl = URL.createObjectURL(blob);
+      this.pendingSeek = this.seekTarget ?? target;
+      this.audio.src = this.audioBlobUrl;
+      this.audio.load();
+      await new Promise((resolve) => {
+        const finish = () => {
+          this.audio.removeEventListener("canplay", finish);
+          this.audio.removeEventListener("seeked", finish);
+          window.clearTimeout(fallbackTimer);
+          resolve();
+        };
+        const fallbackTimer = window.setTimeout(finish, 5000);
+        this.audio.addEventListener("canplay", finish);
+        this.audio.addEventListener("seeked", finish);
+      });
+      this.audioLoading = false;
+      this.setAudioStatus("");
+      const finalTarget = this.seekTarget ?? target;
+      if (Math.abs(this.audio.currentTime - finalTarget) > 0.25) {
+        try {
+          this.audio.currentTime = finalTarget;
+        } catch {
+          this.pendingSeek = finalTarget;
+        }
+      }
+      this.resumeAudioAfterSeek();
+    } catch (error) {
+      console.warn("Audio seek fallback failed:", error);
+      this.audioLoading = false;
+      this.seekTarget = null;
+      this.resumeAfterSeek = false;
+      this.setAudioStatus("Audio seek failed");
+      this.pause();
+    }
+  }
+
+  resumeAudioAfterSeek() {
+    if (
+      !this.audio ||
+      this.audioFailed ||
+      !this.resumeAfterSeek ||
+      this.seeking ||
+      this.audioLoading ||
+      this.audio.seeking ||
+      !this.playing
+    ) {
+      return;
+    }
+    if (
+      this.seekTarget !== null &&
+      Math.abs(this.audio.currentTime - this.seekTarget) > 0.6
+    ) {
+      return;
+    }
+    this.resumeAfterSeek = false;
+    this.audio
+      .play()
+      .then(() => this.setPlayStatus("Playing"))
+      .catch((error) => {
+        console.warn("Audio resume failed:", error);
+        this.pause();
+      });
   }
 
   startScheduler() {
@@ -684,6 +906,27 @@ class MusicPlayer {
   setPlayStatus(text) {
     if (this.playStatus) {
       this.playStatus.textContent = text;
+    }
+  }
+
+  setSoundStatus(text) {
+    if (this.soundStatus) {
+      this.soundStatus.textContent = text;
+    }
+  }
+
+  setAudioStatus(text) {
+    if (!this.audioStatus) {
+      return;
+    }
+    this.audioStatus.textContent = text || "";
+    this.audioStatus.hidden = !text;
+  }
+
+  setLoading(text) {
+    if (this.loading) {
+      this.loading.textContent = text;
+      this.loading.hidden = false;
     }
   }
 

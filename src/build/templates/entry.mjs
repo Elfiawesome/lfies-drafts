@@ -2,7 +2,6 @@ import {
   entryHref,
   escapeAttr,
   escapeHtml,
-  formatFullDate,
   formatMonthYearLong,
   formatYear,
   hrefFor,
@@ -24,12 +23,10 @@ export function renderEntry({
   next,
   related = [],
 }) {
-  const description = entry.description
-    ? markdown.render(entry.description)
-    : `<p>${escapeHtml(type.descriptionFallback || "No notes were filed with this one.")}</p>`;
+  const description = entry.description ? markdown.render(entry.description) : "";
+  const formats = formatBadges(type.formats(entry));
   const collectionHref = hrefFor(root, `${entry.type}/`);
   const year = formatYear(entry.filedAt);
-  const metaRows = type.metaRows(entry, { root });
   const tags = tagItems(entry, root, { links: true });
   const relatedMarkup = related.length
     ? sideCard(
@@ -72,18 +69,15 @@ export function renderEntry({
   <article class="entry" aria-labelledby="entry-title">
     <header class="entry-head">
       <div>
-        <div class="entry-head__kicker">
-          <span class="mono">${escapeHtml(type.label)} / ${escapeHtml(entry.slug)}</span>
-          ${formatBadges(type.formats(entry))}
-        </div>
+        ${formats ? `<div class="entry-head__kicker">${formats}</div>` : ""}
         <h1 id="entry-title">${escapeHtml(entry.title)}</h1>
-        <div class="entry-head__desc prose">${description}</div>
+        ${description ? `<div class="entry-head__desc prose">${description}</div>` : ""}
         ${tags ? `<ul class="tag-list entry-head__tags">${tags}</ul>` : ""}
       </div>
       <div class="entry-head__side">
         <span class="entry-head__date">Dated ${escapeHtml(formatMonthYearLong(entry.filedAt))}</span>
         <span class="stamp entry-head__stamp">${escapeHtml(year || "Undated")}</span>
-        ${ratingHtml(entry.rating)}
+        ${entry.rating ? ratingHtml(entry.rating) : ""}
       </div>
     </header>
 
@@ -100,23 +94,7 @@ export function renderEntry({
         }
       </div>
 
-      <aside class="entry-side" aria-label="Draft details">
-        ${sideCard(
-          "File details",
-          `<dl class="meta-list">
-            <div class="meta-row"><dt>Dated</dt><dd>${escapeHtml(formatFullDate(entry.filedAt))}</dd></div>
-            <div class="meta-row"><dt>Drawer</dt><dd><a href="${escapeAttr(collectionHref)}">${escapeHtml(type.pluralLabel)}</a></dd></div>
-            <div class="meta-row"><dt>Rating</dt><dd>${ratingHtml(entry.rating)}</dd></div>
-            ${metaRows
-              .map(
-                (row) =>
-                  `<div class="meta-row"><dt>${escapeHtml(row.label)}</dt><dd>${escapeHtml(row.value)}</dd></div>`,
-              )
-              .join("")}
-          </dl>
-          ${tags ? `<div class="side-tags"><ul class="tag-list">${tags}</ul></div>` : ""}
-          <p class="side-note">Entry date comes from the earliest timestamp across ${entry.files.length} ${entry.files.length === 1 ? "file" : "files"} in this entry.</p>`,
-        )}
+      <aside class="entry-side" aria-label="Files">
         ${sideCard(`Files / ${entry.files.length}`, fileList(entry))}
         ${nearbyMarkup}
         ${relatedMarkup}

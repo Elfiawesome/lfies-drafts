@@ -3,7 +3,7 @@
   grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.75fr);
   gap: clamp(2.5rem, 6vw, 5rem);
   align-items: center;
-  padding-bottom: clamp(2.5rem, 6vw, 5rem);
+  padding-bottom: clamp(1.5rem, 3vw, 2.5rem);
 }
 
 .hero__copy {
@@ -463,6 +463,7 @@
 
 .entry-card__date {
   flex: 0 0 auto;
+  margin-left: auto;
   padding: 0.12rem 0.35rem;
   border: 1px solid var(--ink);
   background: var(--paper);

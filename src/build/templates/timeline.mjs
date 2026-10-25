@@ -24,6 +24,7 @@ function span(entries) {
 
 export function renderTimeline({ entries, types, root }) {
   const typeMap = new Map(types.map((type) => [type.id, type]));
+  const showType = types.length > 1;
   const dated = entries
     .filter((entry) => entry.filedAtMs)
     .sort((a, b) => a.filedAtMs - b.filedAtMs || compareTitles(a, b));
@@ -54,7 +55,7 @@ export function renderTimeline({ entries, types, root }) {
             <span class="timeline-item__date">${escapeHtml(formatMonthDay(entry.filedAt))}</span>
             <a class="timeline-item__title" href="${escapeAttr(entryHref(root, entry))}">${escapeHtml(entry.title)}</a>
             <span class="timeline-item__meta">
-              <span>${escapeHtml(type.label)}</span>
+              ${showType ? `<span>${escapeHtml(type.label)}</span>` : ""}
               ${formatBadges(type.formats(entry))}
             </span>
           </li>`;
@@ -83,7 +84,7 @@ export function renderTimeline({ entries, types, root }) {
             <span class="timeline-item__date">Unknown</span>
             <a class="timeline-item__title" href="${escapeAttr(entryHref(root, entry))}">${escapeHtml(entry.title)}</a>
             <span class="timeline-item__meta">
-              <span>${escapeHtml(type.label)}</span>
+              ${showType ? `<span>${escapeHtml(type.label)}</span>` : ""}
               ${formatBadges(type.formats(entry))}
             </span>
           </li>`;
@@ -94,9 +95,8 @@ export function renderTimeline({ entries, types, root }) {
 
   return `<section class="timeline-page-head">
     <div>
-      <p class="kicker">Archive chronology / file by file</p>
       <h1>Timeline</h1>
-      <p class="lede">Read from the top: the oldest draft first, the newest last. The dates are not remembered, guessed, or typed in by hand. They are read from the files themselves.</p>
+      <p class="lede">Oldest first. Dates come from the earliest file timestamp in each entry.</p>
       <div class="timeline-year-nav">
         ${yearLinks}
         ${undated.length ? '<a href="#undated">Undated</a>' : ""}
@@ -107,7 +107,7 @@ export function renderTimeline({ entries, types, root }) {
       <div class="collection-head__stat"><span>Drafts dated</span><strong>${dated.length}</strong></div>
       <div class="collection-head__stat"><span>Years covered</span><strong>${escapeHtml(span(entries))}</strong></div>
       <div class="collection-head__stat"><span>Undated</span><strong>${undated.length}</strong></div>
-      <p class="side-note">Each date is the earliest of a file's created, modified, or accessed timestamp. For entries with several files, the oldest file wins.</p>
+      <p class="side-note">Date = oldest file timestamp.</p>
     </aside>
   </section>
 
@@ -115,8 +115,7 @@ export function renderTimeline({ entries, types, root }) {
     entries.length
       ? `<div class="timeline">${yearSections}${undatedMarkup}</div>`
       : `<div class="empty-state" style="margin-top: 2rem">
-          <h2>The drawer is empty.</h2>
-          <p>There are no dated entries to arrange yet.</p>
+          <h2>No entries yet.</h2>
         </div>`
   }`;
 }

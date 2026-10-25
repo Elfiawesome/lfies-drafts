@@ -1,8 +1,11 @@
+import { copyFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { loadContent } from "./content.mjs";
 import { loadContentTypes } from "./registry.mjs";
 import { createMarkdownContext } from "./markdown.mjs";
 import {
+  ensureDirectory,
   mirrorTree,
   resetDirectory,
   writeOutputFile,
@@ -23,6 +26,42 @@ import { renderEntry } from "./templates/entry.mjs";
 import { renderTimeline } from "./templates/timeline.mjs";
 import { renderAbout } from "./templates/about.mjs";
 import { renderNotFound } from "./templates/not-found.mjs";
+
+const require = createRequire(import.meta.url);
+
+async function copyVendorAssets(destination) {
+  const spessasynth = require.resolve("spessasynth_lib");
+  const core = require.resolve("spessasynth_core");
+  const vorbis = require.resolve("stb-vorbis");
+  const vendor = path.join(destination, "assets", "vendor");
+
+  const targets = [
+    [spessasynth, path.join(vendor, "spessasynth", "index.js")],
+    [
+      path.join(path.dirname(spessasynth), "spessasynth_processor.min.js"),
+      path.join(vendor, "spessasynth", "spessasynth_processor.min.js"),
+    ],
+    [core, path.join(vendor, "spessasynth_core", "index.js")],
+    [vorbis, path.join(vendor, "stb-vorbis", "index.js")],
+    [
+      path.join(path.dirname(spessasynth), "..", "LICENSE"),
+      path.join(vendor, "spessasynth", "LICENSE"),
+    ],
+    [
+      path.join(path.dirname(core), "..", "LICENSE"),
+      path.join(vendor, "spessasynth_core", "LICENSE"),
+    ],
+    [
+      path.join(path.dirname(vorbis), "..", "LICENSE"),
+      path.join(vendor, "stb-vorbis", "LICENSE"),
+    ],
+  ];
+
+  for (const [source, target] of targets) {
+    await ensureDirectory(path.dirname(target));
+    await copyFile(source, target);
+  }
+}
 
 function siteBase(site) {
   if (!site.siteUrl) {
@@ -84,6 +123,7 @@ export async function buildSite({ root, site, onLog = () => {} }) {
 
   await resetDirectory(distDirectory);
   await mirrorTree(sourceAssets, path.join(distDirectory, "assets"), { mode: "copy" });
+  await copyVendorAssets(distDirectory);
 
   const { entries, collections, lookup } = await loadContent({
     contentDirectory,
@@ -143,7 +183,7 @@ export async function buildSite({ root, site, onLog = () => {} }) {
     }),
   );
 
-  types.forEach((type, index) => {
+  types.forEach((type) => {
     const typeEntries = [
       ...(collections.find((collection) => collection.type.id === type.id)?.entries || []),
     ].sort(compareTitles);
@@ -166,7 +206,6 @@ export async function buildSite({ root, site, onLog = () => {} }) {
           type,
           entries: typeEntries,
           root: pageRoot,
-          drawerIndex: index + 1,
         }),
       }),
     );
@@ -193,7 +232,6 @@ export async function buildSite({ root, site, onLog = () => {} }) {
     const description =
       truncate(plainText(entry.description), 165) ||
       truncate(plainText(entry.about), 165) ||
-      type.descriptionFallback ||
       site.description;
 
     await writePage(
@@ -208,6 +246,7 @@ export async function buildSite({ root, site, onLog = () => {} }) {
           navHref: `${entry.type}/`,
           path: `${entry.type}/${entry.slug}/`,
           ogType: "article",
+          importMap: true,
           bodyClass: `page-entry page-${entry.type}-entry`,
         },
         content: renderEntry({
@@ -265,7 +304,6 @@ export async function buildSite({ root, site, onLog = () => {} }) {
         content: renderAbout({
           site,
           entries,
-          collections,
           root: aboutRoot,
           markdown: aboutMarkdown,
           buildDate,

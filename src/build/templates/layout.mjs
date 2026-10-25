@@ -5,7 +5,6 @@ import {
   escapeHtml,
   hrefFor,
 } from "../utils.mjs";
-import { starDoodle } from "./partials.mjs";
 
 function navMarkup(site, root, activeHref) {
   return site.nav
@@ -14,25 +13,6 @@ function navMarkup(site, root, activeHref) {
       return `<a href="${escapeAttr(hrefFor(root, item.href))}"${current}>${escapeHtml(item.label)}</a>`;
     })
     .join("");
-}
-
-function marqueeMarkup(site) {
-  const items = (site.marquee || []).filter(Boolean);
-  if (!items.length) {
-    return "";
-  }
-  const sequence = [...items, ...items, ...items]
-    .map(
-      (item) =>
-        `<span class="marquee__item">${escapeHtml(item)}${starDoodle()}</span>`,
-    )
-    .join("");
-  return `<div class="marquee" aria-hidden="true">
-    <div class="marquee__track">
-      <div class="marquee__group">${sequence}</div>
-      <div class="marquee__group">${sequence}</div>
-    </div>
-  </div>`;
 }
 
 function footerMarkup(site, root) {
@@ -48,26 +28,11 @@ function footerMarkup(site, root) {
   return `<footer class="site-footer">
     <div class="site-shell site-footer__inner">
       <div class="footer-grid">
-        <div>
-          <p class="footer-title">${escapeHtml(wordmark[0])} <em>${escapeHtml(wordmark[1] || "")}</em></p>
-          <p class="footer-text">${escapeHtml(site.footer.note)}</p>
-        </div>
-        <div>
-          <p class="footer-label">Stamps of approval</p>
-          <div class="badge-row">
-            <span class="badge-88x31 badge-88x31--red">100%<br>handmade</span>
-            <span class="badge-88x31 badge-88x31--ink">no generated<br>filler</span>
-            <span class="badge-88x31 badge-88x31--gold">keep the<br>wrong notes</span>
-          </div>
-        </div>
-        <div>
-          <p class="footer-label">Find your way</p>
-          <ul class="footer-links">${nav}<li><a href="#top">Back to top</a></li></ul>
-        </div>
+        <p class="footer-title">${escapeHtml(wordmark[0])} <em>${escapeHtml(wordmark[1] || "")}</em></p>
+        <ul class="footer-links">${nav}<li><a href="#top">Back to top</a></li></ul>
       </div>
       <div class="footer-bottom">
-        <span>© ${year} ${escapeHtml(site.author)}. ${escapeHtml(site.footer.rights)}</span>
-        <span>${escapeHtml(site.footer.smallPrint)}</span>
+        <span>© ${year} ${escapeHtml(site.author)}</span>
       </div>
     </div>
   </footer>`;
@@ -104,6 +69,14 @@ export function renderLayout({
     : null;
   const bodyClass = ["site", page.bodyClass].filter(Boolean).join(" ");
   const noindex = page.noindex ? '<meta name="robots" content="noindex">' : "";
+  const importMap = page.importMap
+    ? `<script type="importmap">${JSON.stringify({
+        imports: {
+          spessasynth_core: assetHref(root, "vendor/spessasynth_core/index.js"),
+          "stb-vorbis": assetHref(root, "vendor/stb-vorbis/index.js"),
+        },
+      })}</script>`
+    : "";
 
   return `<!doctype html>
 <html lang="en">
@@ -124,6 +97,7 @@ export function renderLayout({
   <link rel="preload" href="${escapeAttr(assetHref(root, "fonts/lora-normal.woff2"))}" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="${escapeAttr(assetHref(root, "fonts/fraunces-normal.woff2"))}" as="font" type="font/woff2" crossorigin>
   ${styleLinks}
+  ${importMap}
   <script type="module" src="${escapeAttr(assetHref(root, "js/main.js"))}"></script>
 </head>
 <body id="top" class="${escapeAttr(bodyClass)}">
@@ -143,7 +117,6 @@ export function renderLayout({
       </nav>
     </div>
   </header>
-  ${marqueeMarkup(site)}
   <main id="main" class="site-main">
     <div class="site-shell">
       ${content}

@@ -65,7 +65,7 @@ function toneFor(entry) {
   return hash % 6;
 }
 
-export function entryCard(entry, { type, root }) {
+export function entryCard(entry, { type, root, showType = false }) {
   const tone = toneFor(entry);
   const year = formatYear(entry.filedAt);
   const date = formatMonthYear(entry.filedAt);
@@ -88,7 +88,7 @@ export function entryCard(entry, { type, root }) {
 
   return `<a class="entry-card entry-card--tone-${tone}" href="${escapeAttr(entryHref(root, entry))}" data-title="${escapeAttr(entry.title.toLowerCase())}" data-search="${escapeAttr(searchText)}" data-tags="${escapeAttr(entry.tags.join("|").toLowerCase())}" data-formats="${escapeAttr(entry.formatKeys.join(" "))}" data-rating="${entry.rating}" data-date="${entry.filedAtMs || 0}" data-ghost="${escapeAttr(year || "?")}">
     <span class="entry-card__top">
-      <span class="entry-card__kind">${escapeHtml(type.label)} / draft</span>
+      ${showType ? `<span class="entry-card__kind">${escapeHtml(type.label)}</span>` : ""}
       <span class="entry-card__date">${escapeHtml(date)}</span>
     </span>
     <h3 class="entry-card__title">${escapeHtml(entry.title)}</h3>

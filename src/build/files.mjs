@@ -96,8 +96,26 @@ export function findCover(files) {
   );
 }
 
+const LOCKED_ERRORS = new Set(["EBUSY", "EPERM", "EACCES"]);
+
 export async function resetDirectory(directory) {
-  await rm(directory, { recursive: true, force: true });
+  try {
+    await rm(directory, { recursive: true, force: true });
+  } catch (error) {
+    if (!LOCKED_ERRORS.has(error.code)) {
+      throw error;
+    }
+    const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      try {
+        await rm(path.join(directory, entry.name), { recursive: true, force: true });
+      } catch (entryError) {
+        if (!LOCKED_ERRORS.has(entryError.code)) {
+          throw entryError;
+        }
+      }
+    }
+  }
   await mkdir(directory, { recursive: true });
 }
 
@@ -105,17 +123,40 @@ export async function ensureDirectory(directory) {
   await mkdir(directory, { recursive: true });
 }
 
+async function sameVersion(source, destination) {
+  try {
+    const [sourceStats, destinationStats] = await Promise.all([
+      stat(source),
+      stat(destination),
+    ]);
+    return (
+      sourceStats.size === destinationStats.size &&
+      Math.abs(sourceStats.mtimeMs - destinationStats.mtimeMs) < 2
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function placeFile(source, destination, mode) {
-  if (mode === "link") {
-    try {
+  if (await sameVersion(source, destination)) {
+    return;
+  }
+  try {
+    if (mode === "link") {
       await link(source, destination);
-      return;
-    } catch {
+    } else {
       await copyFile(source, destination);
+    }
+  } catch (error) {
+    if (error.code === "EEXIST" && (await sameVersion(source, destination))) {
       return;
     }
+    if (LOCKED_ERRORS.has(error.code)) {
+      return;
+    }
+    throw error;
   }
-  await copyFile(source, destination);
 }
 
 export async function mirrorTree(sourceDirectory, destinationDirectory, options = {}) {

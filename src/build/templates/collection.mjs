@@ -23,7 +23,6 @@ export function renderCollection({
   type,
   entries,
   root,
-  drawerIndex = 1,
 }) {
   const tags = tagSet(entries);
   const inventory = type.inventory(entries);
@@ -32,27 +31,25 @@ export function renderCollection({
     ? [...dated].sort((a, b) => a.filedAtMs - b.filedAtMs)[0]
     : null;
   const filters = type.filters || [];
-  const drawerNumber = String(drawerIndex).padStart(2, "0");
 
   return `<section class="collection-head">
     <div>
-      <p class="kicker">Drawer ${drawerNumber} / ${escapeHtml(type.label)}</p>
       <h1>${escapeHtml(type.drawerTitle)}</h1>
       <p class="lede">${escapeHtml(type.drawerDescription)}</p>
       <div class="button-row" style="margin-top: 1.2rem">
-        <a class="button button--small" href="${escapeAttr(hrefFor(root, "timeline/"))}">View this archive as a timeline</a>
+        <a class="button button--small" href="${escapeAttr(hrefFor(root, "timeline/"))}">Timeline</a>
       </div>
     </div>
     <aside class="collection-head__aside">
       <span class="tape" aria-hidden="true"></span>
-      <div class="collection-head__stat"><span>Oldest draft</span><strong>${escapeHtml(oldest ? formatYear(oldest.filedAt) : "—")}</strong></div>
+      <div class="collection-head__stat"><span>Oldest draft</span><strong>${escapeHtml(oldest ? formatYear(oldest.filedAt) : "N/A")}</strong></div>
       ${inventory
         .map(
           (item) =>
             `<div class="collection-head__stat"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></div>`,
         )
         .join("")}
-      <p class="side-note">Dates are read from the oldest timestamp on each entry's files.</p>
+      <p class="side-note">Date = oldest file timestamp.</p>
     </aside>
   </section>
 
@@ -60,8 +57,8 @@ export function renderCollection({
     <div class="gallery-toolbar">
       <div class="gallery-controls">
         <div class="field field--search">
-          <label for="gallery-search">Search the drawer</label>
-          <input id="gallery-search" type="search" placeholder="Title, tag, or filename..." autocomplete="off" data-gallery-search>
+          <label for="gallery-search">Search</label>
+          <input id="gallery-search" type="search" placeholder="Title, tag, or filename" autocomplete="off" data-gallery-search>
         </div>
         <div class="field">
           <label for="gallery-format">Format</label>
@@ -103,8 +100,7 @@ export function renderCollection({
     </div>
 
     <div class="gallery-status">
-      <span aria-live="polite">Showing <strong data-gallery-count>${entries.length}</strong> of ${entries.length} ${escapeHtml(type.pluralLabel.toLowerCase())}</span>
-      <span>Click a card to open the draft</span>
+      <span aria-live="polite">Showing <strong data-gallery-count>${entries.length}</strong> of ${entries.length} drafts</span>
     </div>
 
     <div class="entry-grid" data-gallery-grid>
@@ -114,9 +110,8 @@ export function renderCollection({
     </div>
 
     <div class="empty-state gallery-empty" data-gallery-empty>
-      <h2>Nothing in that corner.</h2>
-      <p>No drafts match those filters. Try a broader search, or shake the drawer out and start again.</p>
-      <p style="margin-top: 1rem"><button class="button button--small" type="button" data-gallery-reset>Clear the filters</button></p>
+      <h2>No drafts match.</h2>
+      <p><button class="button button--small" type="button" data-gallery-reset>Clear filters</button></p>
     </div>
   </div>`;
 }
